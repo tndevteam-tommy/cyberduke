@@ -19,19 +19,34 @@ def setup_lighting():
   glEnable(GL_NORMALIZE)
 
   # Gloomy Cyberpunk Ambient Base
-  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.08, 0.10, 0.15, 1.0])
+  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.08, 0.10, 0.14, 1.0])
 
-  # Cyan Neon Light Source (Left side)
+  # Cyan Neon Light Source (Suspended over Netrunner Terminal at x=3.5, y=3.6, z=-4.0)
   glEnable(GL_LIGHT0)
-  glLightfv(GL_LIGHT0, GL_POSITION, [-5.0, 3.8, 0.0, 1.0])
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.0, 0.7, 1.0, 1.0])
-  glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 0.9, 1.0, 1.0])
+  glLightfv(GL_LIGHT0, GL_POSITION, [3.5, 3.6, -4.0, 1.0])
+  glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.0, 0.85, 1.0, 1.0])
+  glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 1.0, 1.0, 1.0])
+  glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
+  glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.05)
+  glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.015)
 
-  # Magenta Neon Light Source (Right side)
+  # Magenta Neon Light Source (Suspended over Server Bank at x=-4.5, y=3.6, z=-7.5)
   glEnable(GL_LIGHT1)
-  glLightfv(GL_LIGHT1, GL_POSITION, [5.0, 3.8, 0.0, 1.0])
-  glLightfv(GL_LIGHT1, GL_DIFFUSE, [1.0, 0.0, 0.7, 1.0])
+  glLightfv(GL_LIGHT1, GL_POSITION, [-4.5, 3.6, -7.5, 1.0])
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, [1.0, 0.0, 0.75, 1.0])
   glLightfv(GL_LIGHT1, GL_SPECULAR, [1.0, 0.2, 0.8, 1.0])
+  glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 1.0)
+  glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.05)
+  glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.015)
+
+  # Amber Corridor Light Source (Suspended along central walkway at x=0.0, y=3.8, z=1.0)
+  glEnable(GL_LIGHT2)
+  glLightfv(GL_LIGHT2, GL_POSITION, [0.0, 3.8, 1.0, 1.0])
+  glLightfv(GL_LIGHT2, GL_DIFFUSE, [0.75, 0.50, 0.10, 1.0])
+  glLightfv(GL_LIGHT2, GL_SPECULAR, [0.50, 0.35, 0.05, 1.0])
+  glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 1.0)
+  glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.06)
+  glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.02)
 
 
 def main():
@@ -55,9 +70,9 @@ def main():
 
   setup_lighting()
 
-  # Load Textures
-  tex_wall = create_cyber_texture("grid")
-  tex_floor = create_cyber_texture("metal")
+  # Load Complete Cyberpunk Texture Suite
+  tex_wall = create_cyber_texture("wall")
+  tex_floor = create_cyber_texture("floor")
   tex_metal = create_cyber_texture("metal")
   tex_locked = create_cyber_texture("terminal", hacked=False)
   tex_unlocked = create_cyber_texture("terminal", hacked=True)
@@ -65,8 +80,24 @@ def main():
   tex_neon_cyan = create_cyber_texture("neon_cyan")
   tex_neon_magenta = create_cyber_texture("neon_magenta")
 
-  guard_textures = {
+  all_textures = {
+      "wall": tex_wall,
+      "floor": tex_floor,
       "metal": tex_metal,
+      "terminal_locked": tex_locked,
+      "terminal_unlocked": tex_unlocked,
+      "hazard": tex_hazard,
+      "neon_cyan": tex_neon_cyan,
+      "neon_magenta": tex_neon_magenta,
+      "screen_net": create_cyber_texture("screen_net"),
+      "screen_radar": create_cyber_texture("screen_radar"),
+      "screen_error": create_cyber_texture("screen_error"),
+      "server_rack": create_cyber_texture("server_rack"),
+      "crate": create_cyber_texture("crate"),
+      "cardboard": create_cyber_texture("cardboard"),
+      "soda_can": create_cyber_texture("soda_can"),
+      "neon_sign": create_cyber_texture("neon_sign"),
+      "grate": create_cyber_texture("grate"),
       "skin": create_cyber_texture("skin"),
       "shirt": create_cyber_texture("fabric"),
       "pants": create_cyber_texture("pants"),
@@ -74,10 +105,19 @@ def main():
       "armor": create_cyber_texture("armor"),
   }
 
-  # Create World and Entities
+  guard_textures = {
+      "metal": tex_metal,
+      "skin": all_textures["skin"],
+      "shirt": all_textures["shirt"],
+      "pants": all_textures["pants"],
+      "leather": all_textures["leather"],
+      "armor": all_textures["armor"],
+  }
+
+  # Create World, Obstacles and Entities
   player = Player()
-  room = Room(tex_wall, tex_floor, tex_hazard, tex_neon_cyan, tex_neon_magenta)
-  terminal = Terminal(3.5, 0.9, -4.0, tex_metal, tex_locked, tex_unlocked)
+  room = Room(tex_wall, tex_floor, tex_hazard, tex_neon_cyan, tex_neon_magenta, textures=all_textures)
+  terminal = Terminal(3.5, 0.0, -4.0, tex_metal, tex_locked, tex_unlocked, textures=all_textures)
   guard = CyberGuard(0.0, 0.0, -6.0, guard_textures)
 
   game_state = "PLAYING"  # "PLAYING", "CAUGHT", "WON"
@@ -129,30 +169,49 @@ def main():
       if keys[pygame.K_a]: move_x += strafe_x; move_z += strafe_z
       if keys[pygame.K_d]: move_x -= strafe_x; move_z -= strafe_z
 
-      # Normalize diagonal movement speed
+      all_obstacles = [terminal.get_bounds()] + room.get_obstacles()
+
+      # Normalize diagonal movement speed & check physical collision
       move_len = math.hypot(move_x, move_z)
       if move_len > 0.001:
         speed = (2.0 if player.crouching else 4.5) * dt
-        new_x = player.x + (move_x / move_len) * speed
-        new_z = player.z + (move_z / move_len) * speed
+        step_x = (move_x / move_len) * speed
+        step_z = (move_z / move_len) * speed
+        new_x = player.x + step_x
+        new_z = player.z + step_z
 
         # Room bounds (Door at Z = 10.0 opens when hacked)
-        if -5.5 < new_x < 5.5:
-          player.x = new_x
-
         can_pass_door = room.door_open > 1.8 and abs(player.x) < 1.6
         max_z = 12.0 if can_pass_door else 9.5
+
+        # Check X movement against obstacles and perimeter walls
+        if -5.5 < new_x < 5.5:
+          collided_x = False
+          for obs in all_obstacles:
+            if (obs[0] - 0.32 <= new_x <= obs[1] + 0.32) and (obs[2] - 0.32 <= player.z <= obs[3] + 0.32):
+              collided_x = True
+              break
+          if not collided_x:
+            player.x = new_x
+
+        # Check Z movement against obstacles and perimeter walls
         if -9.5 < new_z < max_z:
-          player.z = new_z
+          collided_z = False
+          for obs in all_obstacles:
+            if (obs[0] - 0.32 <= player.x <= obs[1] + 0.32) and (obs[2] - 0.32 <= new_z <= obs[3] + 0.32):
+              collided_z = True
+              break
+          if not collided_z:
+            player.z = new_z
 
         # Win condition trigger
         if player.z > 10.5:
           game_state = "WON"
 
-      # Update entities & AI vision occlusion
+      # Update entities & AI vision occlusion against all room obstacles
       player.update_height(dt)
       terminal.update(player.x, player.z, keys[pygame.K_e], dt)
-      guard.update(player, dt, obstacles=[terminal.get_bounds()])
+      guard.update(player, dt, obstacles=all_obstacles)
       room.update_door(terminal.is_hacked, dt)
 
       # Catch condition trigger
