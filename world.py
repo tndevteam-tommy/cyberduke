@@ -50,9 +50,9 @@ class Room:
 
   def draw(self):
     no_emission = [0.0, 0.0, 0.0, 1.0]
-    cyan_emission = [0.0, 0.85, 1.0, 1.0]
-    magenta_emission = [1.0, 0.0, 0.75, 1.0]
-    amber_emission = [1.0, 0.65, 0.0, 1.0]
+    cyan_emission = [0.0, 3.4, 4.0, 1.0]
+    magenta_emission = [4.0, 0.0, 3.0, 1.0]
+    amber_emission = [4.0, 2.6, 0.0, 1.0]
 
     tex_metal = self.textures.get("metal", self.tex_wall)
     tex_server = self.textures.get("server_rack", self.tex_wall)
@@ -212,7 +212,7 @@ class Room:
     glPopMatrix()
 
     # Door Status Indicator Strip
-    door_color = [0.0, 0.9, 0.3, 1.0] if self.door_open > 1.8 else [0.9, 0.1, 0.1, 1.0]
+    door_color = [0.0, 3.6, 1.2, 1.0] if self.door_open > 1.8 else [3.6, 0.4, 0.4, 1.0]
     glMaterialfv(GL_FRONT, GL_EMISSION, door_color)
     glColor3f(*door_color[:3])
     glPushMatrix()
@@ -234,7 +234,7 @@ class Room:
     glPopMatrix()
 
     # Illuminated Katakana Face Panel
-    glMaterialfv(GL_FRONT, GL_EMISSION, [0.4, 0.6, 0.9, 1.0])
+    glMaterialfv(GL_FRONT, GL_EMISSION, [1.6, 2.4, 3.6, 1.0])
     glColor3f(1.0, 1.0, 1.0)
     glPushMatrix()
     glTranslatef(0.0, 3.3, -9.88)
@@ -365,7 +365,7 @@ class Room:
     glPopMatrix()
 
     # D. Discarded Illuminated Datachip on Floor near Servers
-    glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 0.6, 0.0, 1.0])
+    glMaterialfv(GL_FRONT, GL_EMISSION, [4.0, 2.4, 0.0, 1.0])
     glColor3f(1.0, 0.7, 0.0)
     glPushMatrix()
     glTranslatef(3.6, 0.015, -7.2)
@@ -401,7 +401,7 @@ class Room:
     glPopMatrix()
 
     # Breaker status diodes
-    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.9, 0.2, 1.0])
+    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 3.6, 0.8, 1.0])
     glColor3f(0.0, 0.9, 0.2)
     glPushMatrix()
     glTranslatef(-5.86, 2.0, -4.0)
@@ -496,7 +496,7 @@ class Room:
       draw_cube(tex_metal)
       glPopMatrix()
 
-      glMaterialfv(GL_FRONT, GL_EMISSION, [1.0, 0.1, 0.1, 1.0])
+      glMaterialfv(GL_FRONT, GL_EMISSION, [4.0, 0.4, 0.4, 1.0])
       glColor3f(1.0, 0.1, 0.1)
       glPushMatrix()
       glTranslatef(x, 1.56, z - 0.50)
@@ -534,7 +534,7 @@ class Room:
       glPopMatrix()
 
     # Top Status Light Strip
-    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.8, 1.0, 1.0])
+    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 3.2, 4.0, 1.0])
     glColor3f(0.0, 0.8, 1.0)
     glPushMatrix()
     glTranslatef(x - 0.52, 3.28, z)
@@ -596,7 +596,7 @@ class Room:
     glPopMatrix()
 
     # Glowing Biometric Scanner Latch on Lockbox
-    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 0.9, 1.0, 1.0])
+    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 3.6, 4.0, 1.0])
     glColor3f(0.0, 0.9, 1.0)
     glPushMatrix()
     glTranslatef(x + 0.08, 1.64, z + 0.13)

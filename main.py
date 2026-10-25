@@ -18,35 +18,38 @@ def setup_lighting():
   # CRITICAL: Normalize normals transformed by non-uniform glScalef
   glEnable(GL_NORMALIZE)
 
-  # Gloomy Cyberpunk Ambient Base
-  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.08, 0.10, 0.14, 1.0])
+  # 4x Brighter Cyberpunk Ambient Base (lift room out of near-blackness)
+  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, [0.32, 0.40, 0.56, 1.0])
 
-  # Cyan Neon Light Source (Suspended over Netrunner Terminal at x=3.5, y=3.6, z=-4.0)
+  # Cyan Neon Light Source (Suspended over Netrunner Terminal at x=3.5, y=3.6, z=-4.0) - 4x Boost
   glEnable(GL_LIGHT0)
   glLightfv(GL_LIGHT0, GL_POSITION, [3.5, 3.6, -4.0, 1.0])
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.0, 0.85, 1.0, 1.0])
-  glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 1.0, 1.0, 1.0])
+  glLightfv(GL_LIGHT0, GL_AMBIENT, [0.0, 0.25, 0.35, 1.0])
+  glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.0, 3.40, 4.00, 1.0])
+  glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 4.00, 4.00, 1.0])
   glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 1.0)
-  glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.05)
-  glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.015)
+  glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.02)
+  glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.005)
 
-  # Magenta Neon Light Source (Suspended over Server Bank at x=-4.5, y=3.6, z=-7.5)
+  # Magenta Neon Light Source (Suspended over Server Bank at x=-4.5, y=3.6, z=-7.5) - 4x Boost
   glEnable(GL_LIGHT1)
   glLightfv(GL_LIGHT1, GL_POSITION, [-4.5, 3.6, -7.5, 1.0])
-  glLightfv(GL_LIGHT1, GL_DIFFUSE, [1.0, 0.0, 0.75, 1.0])
-  glLightfv(GL_LIGHT1, GL_SPECULAR, [1.0, 0.2, 0.8, 1.0])
+  glLightfv(GL_LIGHT1, GL_AMBIENT, [0.30, 0.0, 0.22, 1.0])
+  glLightfv(GL_LIGHT1, GL_DIFFUSE, [4.00, 0.0, 3.00, 1.0])
+  glLightfv(GL_LIGHT1, GL_SPECULAR, [4.00, 0.80, 3.20, 1.0])
   glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 1.0)
-  glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.05)
-  glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.015)
+  glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 0.02)
+  glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.005)
 
-  # Amber Corridor Light Source (Suspended along central walkway at x=0.0, y=3.8, z=1.0)
+  # Amber Corridor Light Source (Suspended along central walkway at x=0.0, y=3.8, z=1.0) - 4x Boost
   glEnable(GL_LIGHT2)
   glLightfv(GL_LIGHT2, GL_POSITION, [0.0, 3.8, 1.0, 1.0])
-  glLightfv(GL_LIGHT2, GL_DIFFUSE, [0.75, 0.50, 0.10, 1.0])
-  glLightfv(GL_LIGHT2, GL_SPECULAR, [0.50, 0.35, 0.05, 1.0])
+  glLightfv(GL_LIGHT2, GL_AMBIENT, [0.25, 0.16, 0.04, 1.0])
+  glLightfv(GL_LIGHT2, GL_DIFFUSE, [3.00, 2.00, 0.40, 1.0])
+  glLightfv(GL_LIGHT2, GL_SPECULAR, [2.00, 1.40, 0.20, 1.0])
   glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 1.0)
-  glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.06)
-  glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.02)
+  glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 0.025)
+  glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.006)
 
 
 def main():
