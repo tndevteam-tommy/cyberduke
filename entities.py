@@ -118,9 +118,11 @@ class Player:
     self.pitch = 0.0
     self.crouching = False
     self.stealth_meter = 0.0
+    self.on_catwalk = False
+    self.ramp_climbing = False
 
-  def update_height(self, dt):
-    target_y = 1.0 if self.crouching else 1.6
+  def update_height(self, dt, floor_y=0.0):
+    target_y = floor_y + (1.0 if self.crouching else 1.6)
     self.y += (target_y - self.y) * 10.0 * dt
 
 
@@ -130,11 +132,12 @@ class Terminal:
   ground-planted steel legs, under-desk tower PC, cable bundles, and netrunner chair.
   """
 
-  def __init__(self, x, y, z, tex_metal, tex_locked, tex_unlocked, textures=None):
+  def __init__(self, x, y, z, tex_metal, tex_locked, tex_unlocked, textures=None, yaw=0.0):
     self.x = x
     # If legacy y=0.9 offset was passed, ground cleanly to y=0.0
     self.y = 0.0 if abs(y - 0.9) < 0.1 else y
     self.z = z
+    self.yaw = yaw
     self.tex_metal = tex_metal
     self.tex_locked = tex_locked
     self.tex_unlocked = tex_unlocked
@@ -149,8 +152,21 @@ class Terminal:
     self.anim_time = 0.0
 
   def get_bounds(self):
-    # Returns (min_x, max_x, min_z, max_z) for LOS occlusion and player collision
-    return (self.x - 1.4, self.x + 1.4, self.z - 0.7, self.z + 0.9)
+    # Returns (min_x, max_x, min_z, max_z, min_y, max_y)
+    ymin = self.y
+    ymax = self.y + 1.85
+    if abs(self.yaw - 180.0) < 1.0:
+      return (self.x - 1.4, self.x + 1.4, self.z - 0.9, self.z + 0.7, ymin, ymax)
+    elif abs(self.yaw) < 1.0:
+      return (self.x - 1.4, self.x + 1.4, self.z - 0.7, self.z + 0.9, ymin, ymax)
+    else:
+      rad = math.radians(self.yaw)
+      cos_y = math.cos(rad)
+      sin_y = math.sin(rad)
+      corners = [(-1.4, -0.7), (1.4, -0.7), (1.4, 0.9), (-1.4, 0.9)]
+      xs = [self.x + (lx * cos_y - lz * sin_y) for lx, lz in corners]
+      zs = [self.z + (lx * sin_y + lz * cos_y) for lx, lz in corners]
+      return (min(xs), max(xs), min(zs), max(zs), ymin, ymax)
 
   def update(self, player_x, player_z, is_e_pressed, dt):
     self.anim_time += dt
@@ -166,6 +182,8 @@ class Terminal:
   def draw(self):
     glPushMatrix()
     glTranslatef(self.x, self.y, self.z)
+    if self.yaw != 0.0:
+      glRotatef(self.yaw, 0, 1, 0)
 
     no_emission = [0.0, 0.0, 0.0, 1.0]
     tex_screen_net = self.textures.get("screen_net", self.tex_metal)
@@ -528,4 +546,407 @@ class Terminal:
     # Reset default specular material
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
     glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0)
+    glColor3f(1.0, 1.0, 1.0)
+
+
+def line_intersects_aabb(p1, p2, box):
+  """Checks if 2D line segment (p1 -> p2) intersects 2D AABB box (xmin, xmax, zmin, zmax)."""
+  x1, z1 = p1
+  x2, z2 = p2
+  xmin, xmax, zmin, zmax = box[:4]
+  dx = x2 - x1
+  dz = z2 - z1
+  t0, t1 = 0.0, 1.0
+  for p, q in [(-dx, x1 - xmin), (dx, xmax - x1), (-dz, z1 - zmin), (dz, zmax - z1)]:
+    if p == 0:
+      if q < 0:
+        return False
+    else:
+      t = q / p
+      if p < 0:
+        if t > t1: return False
+        if t > t0: t0 = t
+      else:
+        if t < t0: return False
+        if t < t1: t1 = t
+  return t0 <= t1
+
+
+def ray_cast_aabb(p1, p2, box):
+  """Returns entry fraction t in [0, 1] if line segment p1->p2 intersects box, else None."""
+  x1, z1 = p1
+  x2, z2 = p2
+  xmin, xmax, zmin, zmax = box[:4]
+  dx = x2 - x1
+  dz = z2 - z1
+  t0, t1 = 0.0, 1.0
+  for p, q in [(-dx, x1 - xmin), (dx, xmax - x1), (-dz, z1 - zmin), (dz, zmax - z1)]:
+    if p == 0:
+      if q < 0:
+        return None
+    else:
+      t = q / p
+      if p < 0:
+        if t > t1: return None
+        if t > t0: t0 = t
+      else:
+        if t < t0: return None
+        if t < t1: t1 = t
+  if t0 <= t1 and t0 >= 0.0:
+    return t0
+  return None
+
+
+class SecurityCamera:
+  """Ceiling-mounted surveillance camera with sweeping detection cone and laser frustum."""
+
+  def __init__(self, x, y, z, mount_yaw=0.0, sweep_angle=35.0, sweep_speed=1.2, max_range=8.5, fov_deg=45.0):
+    self.x = x
+    self.y = y
+    self.z = z
+    self.mount_yaw = mount_yaw
+    self.sweep_angle = sweep_angle
+    self.sweep_speed = sweep_speed
+    self.max_range = max_range
+    self.fov_deg = fov_deg
+    self.obstacles = []
+    self.reset()
+
+  def reset(self):
+    self.anim_time = 0.0
+    self.current_yaw = self.mount_yaw
+    self.is_alerted = False
+    self.alert_pulse = 0.0
+
+  def get_bounds(self):
+    # Ceiling mounted at y=3.6 - no ground footprint
+    return None
+
+  def update(self, player, dt, obstacles=None):
+    self.anim_time += dt
+    self.obstacles = obstacles or []
+    # Smooth sine sweep
+    self.current_yaw = self.mount_yaw + math.sin(self.anim_time * self.sweep_speed) * self.sweep_angle
+
+    dx = player.x - self.x
+    dz = player.z - self.z
+    dist = math.hypot(dx, dz)
+
+    self.is_alerted = False
+
+    if 0.2 < dist <= self.max_range:
+      # Yaw check: 0 deg = +Z, 90 deg = +X
+      angle_to_player = math.degrees(math.atan2(dx, dz))
+      diff = (angle_to_player - self.current_yaw + 180.0) % 360.0 - 180.0
+
+      if abs(diff) <= (self.fov_deg * 0.5):
+        # Ray-box occlusion check against walls and obstacles
+        occluded = False
+        if self.obstacles:
+          for obs in self.obstacles:
+            if line_intersects_aabb((self.x, self.z), (player.x, player.z), obs):
+              occluded = True
+              break
+
+        if not occluded:
+          self.is_alerted = True
+          self.alert_pulse += dt * 8.0
+          # Detection accumulation
+          rate = 65.0 if not player.crouching else 18.0
+          player.stealth_meter = min(100.0, player.stealth_meter + rate * dt)
+          player.spotted_this_frame = True
+
+  def draw(self, obstacles=None):
+    obs = obstacles if obstacles is not None else self.obstacles
+    glPushMatrix()
+    glTranslatef(self.x, self.y, self.z)
+
+    no_emission = [0.0, 0.0, 0.0, 1.0]
+
+    # 1. Base Mounting Plate attached to ceiling
+    glColor3f(0.20, 0.22, 0.25)
+    glPushMatrix()
+    glTranslatef(0.0, 0.18, 0.0)
+    glScalef(0.40, 0.06, 0.40)
+    draw_cube(None)
+    glPopMatrix()
+
+    # 2. Swivel Neck & Pivot Ball
+    glColor3f(0.12, 0.14, 0.16)
+    glPushMatrix()
+    glTranslatef(0.0, 0.08, 0.0)
+    draw_cylinder(0.08, 0.08, 0.12, slices=8, tex_id=None)
+    glPopMatrix()
+
+    # 3. Pivoting Camera Body & Lens
+    glRotatef(self.current_yaw, 0, 1, 0)
+    glRotatef(22, 1, 0, 0)  # Tilted downward towards corridor floor
+
+    # Camera Chassis
+    glColor3f(0.16, 0.18, 0.22)
+    glPushMatrix()
+    glTranslatef(0.0, -0.05, 0.0)
+    glScalef(0.24, 0.18, 0.42)
+    draw_cube(None)
+    glPopMatrix()
+
+    # Top Sun-shield Visor
+    glColor3f(0.10, 0.11, 0.13)
+    glPushMatrix()
+    glTranslatef(0.0, 0.06, 0.06)
+    glScalef(0.28, 0.03, 0.48)
+    draw_cube(None)
+    glPopMatrix()
+
+    # Camera Optical Lens Ring
+    glColor3f(0.25, 0.26, 0.30)
+    glPushMatrix()
+    glTranslatef(0.0, -0.05, 0.22)
+    glRotatef(90, 1, 0, 0)
+    draw_cylinder(0.07, 0.07, 0.05, slices=10, tex_id=None)
+    glPopMatrix()
+
+    # Glowing Optical Eye Sensor
+    if self.is_alerted:
+      pulse = 0.5 + 0.5 * math.sin(self.alert_pulse)
+      lens_color = [4.0, 0.2 * pulse, 0.2 * pulse, 1.0]
+    else:
+      lens_color = [0.0, 3.4, 4.0, 1.0]
+
+    glMaterialfv(GL_FRONT, GL_EMISSION, lens_color)
+    glColor3f(*lens_color[:3])
+    glPushMatrix()
+    glTranslatef(0.0, -0.05, 0.24)
+    glScalef(0.10, 0.10, 0.02)
+    draw_cube(None)
+    glPopMatrix()
+    glMaterialfv(GL_FRONT, GL_EMISSION, no_emission)
+
+    glPopMatrix()  # End camera transforms
+
+    # 4. Projected Ground Laser Cone (Frustum Visualizer, blocked by walls & obstacles)
+    glDisable(GL_LIGHTING)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    if self.is_alerted:
+      glColor4f(1.0, 0.15, 0.15, 0.45)
+    else:
+      glColor4f(0.0, 0.85, 1.0, 0.22)
+
+    rad_pitch = math.radians(22.0)
+    t = self.y / math.sin(rad_pitch)  # Distance along ray to floor y=0
+
+    half_fov = self.fov_deg * 0.5
+    num_slices = 12
+    fan_pts = []
+    y_lens = self.y - 0.1
+
+    for i in range(num_slices + 1):
+      ang = -half_fov + (self.fov_deg * i / num_slices)
+      tot_rad = math.radians(self.current_yaw + ang)
+      gx = self.x + math.sin(tot_rad) * math.cos(rad_pitch) * t
+      gz = self.z + math.cos(tot_rad) * math.cos(rad_pitch) * t
+
+      # Clamp to max_range
+      dist = math.hypot(gx - self.x, gz - self.z)
+      if dist > self.max_range:
+        s = self.max_range / dist
+        gx = self.x + (gx - self.x) * s
+        gz = self.z + (gz - self.z) * s
+
+      # Raycast against wall & obstacle hitboxes
+      t_min = 1.0
+      if obs:
+        for b in obs:
+          th = ray_cast_aabb((self.x, self.z), (gx, gz), b)
+          if th is not None and 0.001 < th < t_min:
+            t_min = th
+
+      hx = self.x + t_min * (gx - self.x)
+      hz = self.z + t_min * (gz - self.z)
+      hy = y_lens + t_min * (0.02 - y_lens)
+      fan_pts.append((hx, hy, hz))
+
+    glBegin(GL_LINES)
+    # Direct laser beam rays from lens to perimeter endpoints
+    for idx in [0, 3, 6, 9, 12]:
+      pt = fan_pts[idx]
+      glVertex3f(self.x, y_lens, self.z)
+      glVertex3f(pt[0], pt[1], pt[2])
+
+    # Perimeter boundary connecting adjacent endpoints
+    for i in range(len(fan_pts) - 1):
+      p1 = fan_pts[i]
+      p2 = fan_pts[i + 1]
+      glVertex3f(p1[0], p1[1], p1[2])
+      glVertex3f(p2[0], p2[1], p2[2])
+
+    # Vertical drop seam line when striking a wall above ground
+    for pt in fan_pts:
+      if pt[1] > 0.05:
+        glVertex3f(pt[0], pt[1], pt[2])
+        glVertex3f(pt[0], 0.02, pt[2])
+    glEnd()
+
+    glEnable(GL_LIGHTING)
+    glColor3f(1.0, 1.0, 1.0)
+
+
+class VendingMachine:
+  """High-tech cyberpunk soda dispenser with illuminated marquee,
+
+  beverage cabinet, cred slot, and interactable electrical distraction spark.
+  """
+
+  def __init__(self, x, y, z, textures=None, yaw=0.0):
+    self.x = x
+    self.y = y
+    self.z = z
+    self.yaw = yaw
+    self.textures = textures or {}
+    self.reset()
+
+  def reset(self):
+    self.is_sparking = False
+    self.spark_timer = 0.0
+    self.cooldown = 0.0
+    self.anim_time = 0.0
+
+  def get_bounds(self):
+    # Returns (min_x, max_x, min_z, max_z, min_y, max_y)
+    return (self.x - 0.65, self.x + 0.65, self.z - 0.55, self.z + 0.55, self.y, self.y + 2.30)
+
+  def update(self, player_x, player_z, is_e_pressed, dt, guards=None):
+    self.anim_time += dt
+    if self.cooldown > 0.0:
+      self.cooldown = max(0.0, self.cooldown - dt)
+
+    if self.is_sparking:
+      self.spark_timer -= dt
+      if self.spark_timer <= 0.0:
+        self.is_sparking = False
+
+    dist = math.hypot(player_x - self.x, player_z - self.z)
+    if dist < 2.5 and is_e_pressed and self.cooldown <= 0.0:
+      self.trigger_distraction(guards)
+
+  def trigger_distraction(self, guards=None):
+    self.is_sparking = True
+    self.spark_timer = 5.0
+    self.cooldown = 22.0
+
+    if guards:
+      for g in guards:
+        # Distract guards within acoustic range (up to 22 meters)
+        dist = math.hypot(g.x - self.x, g.z - self.z)
+        if dist < 22.0:
+          g.distract(self.x, self.z + 1.2)
+
+  def draw(self):
+    glPushMatrix()
+    glTranslatef(self.x, self.y, self.z)
+    if self.yaw != 0.0:
+      glRotatef(self.yaw, 0, 1, 0)
+
+    no_emission = [0.0, 0.0, 0.0, 1.0]
+    tex_metal = self.textures.get("metal", None)
+    tex_hazard = self.textures.get("hazard", None)
+    tex_soda = self.textures.get("soda_can", None)
+    tex_sign = self.textures.get("neon_sign", None)
+
+    # 1. Main Outer Chassis (W=1.2, H=2.3, D=0.9)
+    glColor3f(0.18, 0.20, 0.24)
+    glPushMatrix()
+    glTranslatef(0.0, 1.15, 0.0)
+    glScalef(1.20, 2.30, 0.90)
+    draw_cube(tex_metal)
+    glPopMatrix()
+
+    # 2. Base Kickplate with hazard caution stripes
+    glColor3f(0.85, 0.85, 0.85)
+    glPushMatrix()
+    glTranslatef(0.0, 0.10, 0.02)
+    glScalef(1.22, 0.20, 0.92)
+    draw_cube(tex_hazard)
+    glPopMatrix()
+
+    # 3. Illuminated Top Header Marquee ("NEON COLD")
+    if self.is_sparking:
+      flicker = 0.5 + 0.5 * math.sin(self.anim_time * 35.0)
+      marquee_emission = [4.0 * flicker, 0.5 * flicker, 3.5 * flicker, 1.0]
+    else:
+      marquee_emission = [4.0, 0.0, 3.2, 1.0]
+
+    glMaterialfv(GL_FRONT, GL_EMISSION, marquee_emission)
+    glColor3f(1.0, 1.0, 1.0)
+    glPushMatrix()
+    glTranslatef(0.0, 2.05, 0.46)
+    glScalef(1.05, 0.35, 0.04)
+    draw_cube(tex_sign)
+    glPopMatrix()
+    glMaterialfv(GL_FRONT, GL_EMISSION, no_emission)
+
+    # 4. Beverage Display Window & Shelves
+    glColor3f(0.08, 0.10, 0.12)
+    glPushMatrix()
+    glTranslatef(0.0, 1.30, 0.46)
+    glScalef(1.02, 1.05, 0.03)
+    draw_cube(None)
+    glPopMatrix()
+
+    # Cans on Display Shelves
+    glMaterialfv(GL_FRONT, GL_EMISSION, [0.0, 2.0, 2.5, 1.0] if not self.is_sparking else [3.0, 2.0, 0.0, 1.0])
+    glColor3f(1.0, 1.0, 1.0)
+    for row_y in [1.05, 1.35, 1.62]:
+      for col_x in [-0.35, -0.12, 0.12, 0.35]:
+        glPushMatrix()
+        glTranslatef(col_x, row_y, 0.45)
+        draw_cylinder(0.035, 0.035, 0.11, slices=8, tex_id=tex_soda)
+        glPopMatrix()
+    glMaterialfv(GL_FRONT, GL_EMISSION, no_emission)
+
+    # 5. Keypad, Coin / Cred Acceptor Slot
+    glColor3f(0.12, 0.14, 0.16)
+    glPushMatrix()
+    glTranslatef(0.38, 0.65, 0.46)
+    glScalef(0.24, 0.42, 0.03)
+    draw_cube(tex_metal)
+    glPopMatrix()
+
+    # Cred Slot Status LED
+    if self.is_sparking:
+      slot_emission = [4.0, 0.2, 0.2, 1.0]
+    elif self.cooldown > 0.0:
+      slot_emission = [2.5, 2.0, 0.0, 1.0]
+    else:
+      slot_emission = [0.0, 3.6, 0.8, 1.0]
+
+    glMaterialfv(GL_FRONT, GL_EMISSION, slot_emission)
+    glColor3f(*slot_emission[:3])
+    glPushMatrix()
+    glTranslatef(0.38, 0.76, 0.48)
+    glScalef(0.14, 0.03, 0.02)
+    draw_cube(None)
+    glPopMatrix()
+    glMaterialfv(GL_FRONT, GL_EMISSION, no_emission)
+
+    # 6. Dispense Hopper Tray at Bottom
+    glColor3f(0.10, 0.11, 0.14)
+    glPushMatrix()
+    glTranslatef(0.0, 0.35, 0.46)
+    glScalef(0.72, 0.22, 0.08)
+    draw_cube(tex_metal)
+    glPopMatrix()
+
+    # Dispensed Soda Can sitting in tray
+    if self.is_sparking or self.cooldown > 4.0:
+      glColor3f(1.0, 1.0, 1.0)
+      glPushMatrix()
+      glTranslatef(0.0, 0.30, 0.48)
+      glRotatef(90, 1, 0, 0)
+      draw_cylinder(0.035, 0.035, 0.11, slices=8, tex_id=tex_soda)
+      glPopMatrix()
+
+    glPopMatrix()  # End Vending Machine
     glColor3f(1.0, 1.0, 1.0)

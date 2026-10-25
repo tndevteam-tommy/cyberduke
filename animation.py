@@ -13,7 +13,7 @@ def lerp(a, b, u):
 
 def line_intersects_box(x1, z1, x2, z2, box):
   """Slab intersection test for 2D line segment vs AABB."""
-  xmin, xmax, zmin, zmax = box
+  xmin, xmax, zmin, zmax = box[:4]
   if (max(x1, x2) < xmin or min(x1, x2) > xmax or
       max(z1, z2) < zmin or min(z1, z2) > zmax):
     return False
@@ -45,6 +45,45 @@ def line_intersects_box(x1, z1, x2, z2, box):
       return False
 
   return tmin <= tmax and tmax >= 0.0 and tmin <= 1.0
+
+
+def ray_cast_aabb(p1, p2, box):
+  """Slab intersection test for 3D segment vs 3D AABB.
+  Returns (hit, t) where t in [0.0, 1.0].
+  """
+  xmin, xmax, zmin, zmax = box[:4]
+  ymin = box[4] if len(box) >= 6 else 0.0
+  ymax = box[5] if len(box) >= 6 else 5.0
+
+  x1, y1, z1 = p1
+  x2, y2, z2 = p2
+  dx = x2 - x1
+  dy = y2 - y1
+  dz = z2 - z1
+
+  tmin, tmax = 0.0, 1.0
+
+  for p, d, bmin, bmax in [(x1, dx, xmin, xmax), (y1, dy, ymin, ymax), (z1, dz, zmin, zmax)]:
+    if abs(d) < 1e-6:
+      if p < bmin or p > bmax:
+        return False, 1.0
+    else:
+      t1 = (bmin - p) / d
+      t2 = (bmax - p) / d
+      tmin = max(tmin, min(t1, t2))
+      tmax = min(tmax, max(t1, t2))
+      if tmin > tmax:
+        return False, 1.0
+
+  if tmin <= tmax and tmax >= 0.0 and tmin <= 1.0:
+    return True, max(0.0, tmin)
+  return False, 1.0
+
+
+def line_intersects_aabb(p1, p2, box):
+  """3D segment vs 3D AABB intersection test."""
+  hit, _ = ray_cast_aabb(p1, p2, box)
+  return hit
 
 
 @dataclass
